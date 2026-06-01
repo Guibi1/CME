@@ -22,10 +22,13 @@ fn main() -> color_eyre::Result<ExitCode> {
 
     let args = args::Args::parse();
 
-    let file = File::open(&args.file)?;
-    let mut textarea = BufReader::new(file)
-        .lines()
-        .collect::<io::Result<TextArea>>()?;
+    let mut textarea = match File::open(&args.file) {
+        Ok(file) => BufReader::new(file)
+            .lines()
+            .collect::<io::Result<TextArea>>()?,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => TextArea::default(),
+        Err(err) => return Err(err.into()),
+    };
     textarea.move_cursor(CursorMove::Bottom);
     textarea.move_cursor(CursorMove::End);
     textarea.insert_newline();
@@ -93,8 +96,7 @@ fn run(
             }
             textarea.render(areas.next().unwrap(), f.buffer_mut());
             if !args.no_keybinds {
-                help.clone()
-                    .render(areas.skip(1).next().unwrap(), f.buffer_mut());
+                help.clone().render(areas.nth(1).unwrap(), f.buffer_mut());
             }
         })?;
 
@@ -129,8 +131,11 @@ fn run(
             Input {
                 key: Key::Enter, ..
             } => {
-                let mut file = OpenOptions::new().write(true).open(&args.file)?;
-                file.set_len(0)?;
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(&args.file)?;
                 file.write_all(textarea.into_lines().join("\n").as_bytes())?;
                 file.flush()?;
                 return Ok(ExitCode::SUCCESS);
