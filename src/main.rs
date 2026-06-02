@@ -19,7 +19,6 @@ mod args;
 
 fn main() -> color_eyre::Result<ExitCode> {
     color_eyre::install()?;
-
     let args = args::Args::parse();
 
     let mut textarea = match File::open(&args.file) {
@@ -41,10 +40,14 @@ fn main() -> color_eyre::Result<ExitCode> {
                 + if !args.no_keybinds { 2 } else { 0 },
         ),
     });
-    let result = run(textarea, &mut terminal, &args);
+    let cursor_pos = terminal.get_cursor_position()?;
+    let exit_code = run(textarea, &mut terminal, &args)?;
 
     ratatui::restore();
-    result
+    terminal.set_cursor_position(cursor_pos)?;
+    println!("\n");
+
+    Ok(exit_code)
 }
 
 fn run(
