@@ -1,10 +1,11 @@
 use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Write, stdout};
 use std::os::unix::process::CommandExt;
 use std::process::{Command, ExitCode};
 
 use clap::Parser;
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::Style;
 use ratatui::style::Stylize;
@@ -34,18 +35,30 @@ fn main() -> color_eyre::Result<ExitCode> {
     textarea.move_cursor(CursorMove::Top);
 
     let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: Viewport::Inline(
-            args.height
-                + if args.title.is_some() { 1 } else { 0 }
-                + if !args.no_keybinds { 2 } else { 0 },
-        ),
+        viewport: if args.fullscreen {
+            Viewport::Fullscreen
+        } else {
+            Viewport::Inline(
+                args.height
+                    + if args.title.is_some() { 1 } else { 0 }
+                    + if !args.no_keybinds { 2 } else { 0 },
+            )
+        },
     });
+    if args.fullscreen {
+        execute!(stdout(), EnterAlternateScreen)?;
+    }
+
     let cursor_pos = terminal.get_cursor_position()?;
     let exit_code = run(textarea, &mut terminal, &args)?;
 
     ratatui::restore();
-    terminal.set_cursor_position(cursor_pos)?;
-    println!("\n");
+    if args.fullscreen {
+        execute!(stdout(), LeaveAlternateScreen)?;
+    } else {
+        terminal.set_cursor_position(cursor_pos)?;
+        println!("\n");
+    }
 
     Ok(exit_code)
 }

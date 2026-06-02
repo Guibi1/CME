@@ -10,6 +10,10 @@ pub struct Args {
     #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u16).range(1..))]
     pub height: u16,
 
+    /// Enables fullscreen mode (ignores height)
+    #[arg(long, default_value_t = false)]
+    pub fullscreen: bool,
+
     /// Show a title bar
     #[arg(long)]
     pub title: Option<String>,
