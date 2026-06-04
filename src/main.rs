@@ -1,7 +1,8 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write, stdout};
-use std::os::unix::process::CommandExt;
 use std::process::{Command, ExitCode};
+use std::thread::sleep;
+use std::time::Duration;
 
 use clap::Parser;
 use crossterm::execute;
@@ -11,7 +12,7 @@ use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::symbols::border;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Widget};
+use ratatui::widgets::{Block, Paragraph, Widget};
 use ratatui::widgets::{Borders, Padding};
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use ratatui_textarea::{CursorMove, Input, Key, TextArea};
@@ -129,13 +130,40 @@ fn run(
                 shift: false,
                 alt: false,
             } => {
+                #[cfg(not(target_os = "windows"))]
                 let Ok(editor) = std::env::var("EDITOR") else {
                     eprintln!("$EDITOR not set");
                     continue;
                 };
-                let mut cmd = Command::new(editor);
-                cmd.arg(&args.file);
-                return Err(cmd.exec().into());
+                #[cfg(target_os = "windows")]
+                let editor = std::env::var("EDITOR").unwrap_or_else(|_| "notepad".to_string());
+
+                terminal.draw(|f| {
+                    let mut areas = f.area().layout_vec(&layout).into_iter();
+
+                    if title.is_some() {
+                        title.clone().render(areas.next().unwrap(), f.buffer_mut());
+                    }
+                    Paragraph::new("File opened in editor...".dark_gray())
+                        .block(
+                            Block::new()
+                                .borders(Borders::LEFT)
+                                .border_style(Style::new().gray())
+                                .border_set(border::THICK)
+                                .padding(Padding::horizontal(1)),
+                        )
+                        .render(areas.next().unwrap(), f.buffer_mut());
+                    if !args.no_keybinds {
+                        help.clone().render(areas.nth(1).unwrap(), f.buffer_mut());
+                    }
+                })?;
+
+                save_file(textarea, args)?;
+                let mut cmd = Command::new(editor).arg(&args.file).spawn()?;
+                while cmd.try_wait()?.is_none() {
+                    sleep(Duration::from_millis(300));
+                }
+                return Ok(ExitCode::SUCCESS);
             }
             Input { key: Key::Esc, .. }
             | Input {
@@ -147,13 +175,7 @@ fn run(
             Input {
                 key: Key::Enter, ..
             } => {
-                let mut file = OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(&args.file)?;
-                file.write_all(textarea.into_lines().join("\n").as_bytes())?;
-                file.flush()?;
+                save_file(textarea, args)?;
                 return Ok(ExitCode::SUCCESS);
             }
             event => {
@@ -169,4 +191,15 @@ fn run(
             }
         }
     }
+}
+
+fn save_file(textarea: TextArea, args: &args::Args) -> color_eyre::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&args.file)?;
+    file.write_all(textarea.into_lines().join("\n").as_bytes())?;
+    file.flush()?;
+    Ok(())
 }
