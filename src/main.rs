@@ -1,6 +1,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write, stdout};
-use std::process::{Command, ExitCode};
+use std::process::Command;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ use ratatui_textarea::{CursorMove, Input, Key, TextArea};
 
 mod args;
 
-fn main() -> color_eyre::Result<ExitCode> {
+fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     let args = args::Args::parse();
 
@@ -46,14 +46,14 @@ fn main() -> color_eyre::Result<ExitCode> {
             )
         },
     });
+    let cursor_pos = terminal.get_cursor_position()?;
     if args.fullscreen {
         execute!(stdout(), EnterAlternateScreen)?;
     }
 
-    let cursor_pos = terminal.get_cursor_position()?;
-    let exit_code = run(textarea, &mut terminal, &args)?;
-
+    run(textarea, &mut terminal, &args)?;
     ratatui::restore();
+
     if args.fullscreen {
         execute!(stdout(), LeaveAlternateScreen)?;
     } else {
@@ -61,14 +61,14 @@ fn main() -> color_eyre::Result<ExitCode> {
         println!("\n");
     }
 
-    Ok(exit_code)
+    Ok(())
 }
 
 fn run(
     mut textarea: TextArea,
     terminal: &mut DefaultTerminal,
     args: &args::Args,
-) -> color_eyre::Result<ExitCode> {
+) -> color_eyre::Result<()> {
     textarea.set_block(
         Block::new()
             .borders(Borders::LEFT)
@@ -163,7 +163,7 @@ fn run(
                 while cmd.try_wait()?.is_none() {
                     sleep(Duration::from_millis(300));
                 }
-                return Ok(ExitCode::SUCCESS);
+                return Ok(());
             }
             Input { key: Key::Esc, .. }
             | Input {
@@ -171,12 +171,12 @@ fn run(
                 ctrl: true,
                 shift: false,
                 alt: false,
-            } => return Ok(ExitCode::FAILURE),
+            } => return Ok(()),
             Input {
                 key: Key::Enter, ..
             } => {
                 save_file(textarea, args)?;
-                return Ok(ExitCode::SUCCESS);
+                return Ok(());
             }
             event => {
                 textarea.input(event);
