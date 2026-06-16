@@ -23,17 +23,20 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     let args = args::Args::parse();
 
-    let mut textarea = match File::open(&args.file) {
-        Ok(file) => BufReader::new(file)
-            .lines()
-            .collect::<io::Result<TextArea>>()?,
+    let textarea = match File::open(&args.file) {
+        Ok(file) => {
+            let mut textarea = BufReader::new(file)
+                .lines()
+                .collect::<io::Result<TextArea>>()?;
+            textarea.move_cursor(CursorMove::Bottom);
+            textarea.move_cursor(CursorMove::End);
+            textarea.insert_newline();
+            textarea.move_cursor(CursorMove::Top);
+            textarea
+        }
         Err(err) if err.kind() == io::ErrorKind::NotFound => TextArea::default(),
         Err(err) => return Err(err.into()),
     };
-    textarea.move_cursor(CursorMove::Bottom);
-    textarea.move_cursor(CursorMove::End);
-    textarea.insert_newline();
-    textarea.move_cursor(CursorMove::Top);
 
     let mut terminal = ratatui::init_with_options(TerminalOptions {
         viewport: if args.fullscreen {
@@ -46,6 +49,7 @@ fn main() -> color_eyre::Result<()> {
             )
         },
     });
+    terminal.clear()?;
     let cursor_pos = terminal.get_cursor_position()?;
     if args.fullscreen {
         execute!(stdout(), EnterAlternateScreen)?;
