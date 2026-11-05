@@ -17,6 +17,8 @@ use ratatui::widgets::{Borders, Padding};
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use ratatui_textarea::{CursorMove, Input, Key, TextArea};
 
+use crate::args::ArgsFullscreenMode;
+
 mod args;
 
 fn main() -> color_eyre::Result<()> {
@@ -38,27 +40,35 @@ fn main() -> color_eyre::Result<()> {
         Err(err) => return Err(err.into()),
     };
 
+    let total_height = args.height
+        + if args.title.is_some() { 1 } else { 0 }
+        + if !args.no_keybinds { 2 } else { 0 };
+
+    let fullscreen = match args.fullscreen {
+        ArgsFullscreenMode::Disabled => false,
+        ArgsFullscreenMode::Enabled => true,
+        ArgsFullscreenMode::Adaptive(threshold) => {
+            textarea.lines().iter().count() > threshold.into()
+        }
+    };
+
     let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: if args.fullscreen {
+        viewport: if fullscreen {
             Viewport::Fullscreen
         } else {
-            Viewport::Inline(
-                args.height
-                    + if args.title.is_some() { 1 } else { 0 }
-                    + if !args.no_keybinds { 2 } else { 0 },
-            )
+            Viewport::Inline(total_height)
         },
     });
     terminal.clear()?;
     let cursor_pos = terminal.get_cursor_position()?;
-    if args.fullscreen {
+    if fullscreen {
         execute!(stdout(), EnterAlternateScreen)?;
     }
 
-    run(textarea, &mut terminal, &args)?;
+    run(textarea, &mut terminal, fullscreen, &args)?;
     ratatui::restore();
 
-    if args.fullscreen {
+    if fullscreen {
         execute!(stdout(), LeaveAlternateScreen)?;
     } else {
         terminal.set_cursor_position(cursor_pos)?;
@@ -71,6 +81,7 @@ fn main() -> color_eyre::Result<()> {
 fn run(
     mut textarea: TextArea,
     terminal: &mut DefaultTerminal,
+    fullscreen: bool,
     args: &args::Args,
 ) -> color_eyre::Result<()> {
     textarea.set_block(
@@ -99,7 +110,11 @@ fn run(
         "save ".dark_gray().dim(),
     ]);
 
-    let mut layout = vec![Constraint::Length(args.height)];
+    let mut layout = if fullscreen {
+        vec![Constraint::Fill(1)]
+    } else {
+        vec![Constraint::Length(args.height)]
+    };
     if title.is_some() {
         layout.insert(0, Constraint::Length(1));
     }
