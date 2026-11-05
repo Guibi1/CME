@@ -1,5 +1,5 @@
 {
-  description = "A prompt-like file editor for commit messages.";
+  description = "Commit Message Editor flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -19,6 +19,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        inherit (pkgs) lib;
 
         craneLib = crane.mkLib pkgs;
         src = craneLib.cleanCargoSource ./.;
@@ -35,6 +36,17 @@
           // {
             inherit cargoArtifacts;
             doCheck = false;
+
+            meta = {
+              description = "A simple editor for small commit messages on the terminal";
+              longDescription = ''
+                A small and simple TUI editor to create and edit commit messages fast.
+              '';
+              homepage = "https://github.com/Guibi1/CME";
+              license = lib.licenses.mit;
+              platforms = lib.platforms.all;
+              mainProgram = "cme";
+            };
           }
         );
       in
@@ -74,12 +86,15 @@
         };
 
         packages = {
+          inherit cme;
           default = cme;
         };
 
         apps.default = flake-utils.lib.mkApp {
           drv = cme;
         };
+
+        formatter = pkgs.nixfmt;
 
         devShells.default = craneLib.devShell {
           checks = self.checks.${system};
